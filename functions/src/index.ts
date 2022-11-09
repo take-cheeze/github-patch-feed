@@ -52,7 +52,7 @@ const fetchFeed = async () => {
 
     const m = link.match(URL_MATCH);
     if (!m) {
-      console.log("Skipping url:", link);
+      console.log("Skipping non-diff url:", link);
       return;
     }
 
@@ -81,31 +81,21 @@ const fetchFeed = async () => {
     const doc = {
       url: link,
       updated: Timestamp.fromMillis(parsedTime),
-      author: e.author.name,
+      author: e.author,
       title: `${e.title} (${m[3]}...${m[4]})`,
       patch: await fetchUrl(link + ".patch"),
       diff: await fetchUrl(link + ".diff"),
     };
+    if (doc.patch.length === 0 && doc.diff.length === 0) {
+      console.log("Skipping not-found url:", link);
+      return;
+    }
 
     const docRef = col.doc(toId(link));
     await docRef.set(doc);
-
-    const removeOlds = async () => {
-      const allFeeds = await col.orderBy("updated", "desc").select("url").get();
-      const deletingFeeds = allFeeds.docs.slice(FEED_ITEM_MAX, -1);
-      if (deletingFeeds.length == 0) {
-        return;
-      }
-      const batch = db.batch();
-      for (const f of deletingFeeds) {
-        batch.delete(f.ref);
-      }
-      await batch.commit();
-    };
-    await removeOlds();
   };
 
-  console.log("Fetching:", FEED_URL.value());
+  console.log("Fetching github feed");
   const response = await fetch(FEED_URL.value());
   if (!response.ok || !response.body) {
     console.log("feed fetch error:", response.type);
@@ -153,15 +143,30 @@ const generateFeed = async (field: string): Promise<string> => {
           name: d.author,
         },
       ],
-      date: d.updated,
+      date: d.updated.toDate(),
     });
   }
   return feed.atom1();
 };
 
+const removeOlds = async () => {
+  const allFeeds = await col.orderBy("updated", "desc").select("url").get();
+  const deletingFeeds = allFeeds.docs.slice(FEED_ITEM_MAX, -1);
+  console.log("Deleting", deletingFeeds.length, "items");
+  if (deletingFeeds.length == 0) {
+    return;
+  }
+  const batch = db.batch();
+  for (const f of deletingFeeds) {
+    batch.delete(f.ref);
+  }
+  await batch.commit();
+};
+
 const f = functions.runWith({secrets: ["GITHUB_FEED_URL", "APP_URL"]});
 
 exports.schedule = f.pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
+exports.gc = f.pubsub.schedule("every 10 minutes").onRun(() => removeOlds());
 
 const app = express();
 
@@ -175,8 +180,12 @@ app.get("/patch", async (req, res) => {
   res.send(await generateFeed("patch"));
 });
 app.get("/manual", (req, res) => {
-  exports.schedule();
+  fetchFeed();
   res.send("started manual fetch");
+});
+app.get("/manual_gc", (req, res) => {
+  removeOlds();
+  res.send("started manual gc");
 });
 
 exports.main = f.https.onRequest(app);
