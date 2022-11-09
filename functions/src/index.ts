@@ -1,30 +1,23 @@
-import * as functions from "firebase-functions";
-
-import fetch from "node-fetch";
-
-/* eslint-disable @typescript-eslint/no-var-requires */
-const defineSecret = require("firebase-functions/params").defineSecret;
-const FEED_URL = defineSecret("GITHUB_FEED_URL");
-const APP_URL = defineSecret("APP_URL");
-
-import express = require("express");
-import cors = require("cors");
-
-/* eslint-disable @typescript-eslint/no-var-requires */
-const FeedParser: any = require("feedparser");
-/* eslint-disable @typescript-eslint/no-var-requires */
-const humanize: any = require("humanize");
-// import escapeHtml = require('escape-html');
-import {Feed} from "feed";
-
+import {pubsub, https} from "firebase-functions";
+import {defineSecret} from "firebase-functions/params";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {initializeApp} from "firebase-admin/app";
 
-const Diff2html: any = require("diff2html");
+import fetch from "node-fetch";
+import {Feed} from "feed";
+
+import * as express from "express";
+import * as cors from "cors";
+import * as FeedParser from "feedparser";
+import {filesize} from "humanize";
+import * as Diff2html from "diff2html";
+// import escapeHtml = require('escape-html');
 
 initializeApp();
 const db = getFirestore();
 const col = db.collection("feeds");
+const FEED_URL = defineSecret("GITHUB_FEED_URL");
+const APP_URL = defineSecret("APP_URL");
 
 const FEED_ITEM_MAX = 50;
 const FEED_SIZE_THRESHOLD = 1 * 1024 * 1024; // 1 MB
@@ -63,7 +56,7 @@ const fetchFeed = async () => {
 
     const fetchUrl = async (url: string): Promise<string> => {
       console.log("Fetching:", url);
-      const response = await fetch(FEED_URL);
+      const response = await fetch(url);
       if (!response.ok) {
         console.log("feed fetch error:", response.type);
         return "";
@@ -73,7 +66,7 @@ const fetchFeed = async () => {
       if (src.length == 0) {
         return ""; // skip empty feed
       } else if (src.length > FEED_SIZE_THRESHOLD) {
-        return `Data size too big: ${humanize.filesize(src.length)}`;
+        return `Data size too big: ${filesize(src.length)}`;
       } else {
         // return `<pre>${escapeHtml(src)}</pre>`;
         const diffJson = Diff2html.parse(src);
@@ -108,14 +101,14 @@ const fetchFeed = async () => {
     await removeOlds();
   };
 
-  console.log("Fetching:", FEED_URL);
-  const response = await fetch(FEED_URL);
+  console.log("Fetching:", FEED_URL.value());
+  const response = await fetch(FEED_URL.value());
   if (!response.ok || !response.body) {
     console.log("feed fetch error:", response.type);
     return;
   }
 
-  const parser = new FeedParser();
+  const parser = new FeedParser({});
   response.body.pipe(parser)
       .on("readable", function(this: any) {
         let item;
@@ -128,10 +121,8 @@ const fetchFeed = async () => {
       });
 };
 
-const app = express();
-
 const generateFeed = async (field: string): Promise<string> => {
-  const feedUrl = `${APP_URL}/${field}`;
+  const feedUrl = `${APP_URL.value()}/${field}`;
   const feed = new Feed({
     title: `github-patch-feed ${field}`,
     id: feedUrl,
@@ -163,6 +154,8 @@ const generateFeed = async (field: string): Promise<string> => {
   return feed.atom1();
 };
 
+const app = express();
+
 // Automatically allow cross-origin requests
 app.use(cors({origin: true}));
 
@@ -176,7 +169,6 @@ app.get("/manual", (req, res) => {
   fetchFeed();
   res.send("started manual fetch");
 });
+module.exports.main = https.onRequest(app);
 
-exports.main = functions.https.onRequest(app);
-
-exports.scheduleFunction = functions.pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
+module.exports.scheduleFunction = pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());

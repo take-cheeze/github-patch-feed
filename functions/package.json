@@ -21,11 +21,13 @@
     "feed": "^4.2.2",
     "feedparser": "^2.2.10",
     "firebase-admin": "^10.3.0",
-    "firebase-functions": "^3.18.0",
+    "firebase-functions": "^4.0.0",
     "humanize": "^0.0.9",
     "node-fetch": "^3.2.10"
   },
   "devDependencies": {
+    "@types/feedparser": "^2.2.5",
+    "@types/hogan.js": "^3.0.1",
     "@typescript-eslint/eslint-plugin": "^5.12.0",
     "@typescript-eslint/parser": "^5.12.0",
     "eslint": "^8.9.0",
