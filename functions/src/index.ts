@@ -56,7 +56,7 @@ const fetchFeed = async () => {
       return;
     }
 
-    const parsedTime = Date.parse(e.updated);
+    const parsedTime = Date.parse(e.date);
 
     const fetchUrl = async (url: string): Promise<string> => {
       console.log("Fetching:", url);
@@ -159,7 +159,9 @@ const generateFeed = async (field: string): Promise<string> => {
   return feed.atom1();
 };
 
-exports.schedule = functions.runWith({secrets: ["GITHUB_FEED_URL"]}).pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
+const f = functions.runWith({secrets: ["GITHUB_FEED_URL", "APP_URL"]});
+
+exports.schedule = f.pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
 
 const app = express();
 
@@ -177,4 +179,4 @@ app.get("/manual", (req, res) => {
   res.send("started manual fetch");
 });
 
-exports.main = functions.runWith({secrets: ["APP_URL"]}).https.onRequest(app);
+exports.main = f.https.onRequest(app);
