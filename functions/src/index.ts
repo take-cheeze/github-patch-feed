@@ -2,13 +2,17 @@ import * as functions from "firebase-functions";
 
 import fetch from "node-fetch";
 
-import {defineSecret} from "firebase-functions/params";
+/* eslint-disable @typescript-eslint/no-var-requires */
+const defineSecret = require("firebase-functions/params").defineSecret;
 const FEED_URL = defineSecret("GITHUB_FEED_URL");
 const APP_URL = defineSecret("APP_URL");
+
 import express = require("express");
 import cors = require("cors");
 
+/* eslint-disable @typescript-eslint/no-var-requires */
 const FeedParser: any = require("feedparser");
+/* eslint-disable @typescript-eslint/no-var-requires */
 const humanize: any = require("humanize");
 // import escapeHtml = require('escape-html');
 import {Feed} from "feed";
@@ -16,7 +20,7 @@ import {Feed} from "feed";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {initializeApp} from "firebase-admin/app";
 
-import Diff2html = require("diff2html");
+const Diff2html: any = require("diff2html");
 
 initializeApp();
 const db = getFirestore();
@@ -113,7 +117,7 @@ const fetchFeed = async () => {
 
   const parser = new FeedParser();
   response.body.pipe(parser)
-      .on("readable", function() {
+      .on("readable", function(this: any) {
         let item;
         while (/* eslint-disable no-invalid-this */ item = this.read()) {
           processItem(item);
