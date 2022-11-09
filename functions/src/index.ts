@@ -169,6 +169,6 @@ app.get("/manual", (req, res) => {
   fetchFeed();
   res.send("started manual fetch");
 });
-module.exports.main = https.onRequest(app);
 
-module.exports.scheduleFunction = pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
+exports.main = https.onRequest(app);
+exports.scheduleFunction = pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
