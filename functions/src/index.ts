@@ -1,17 +1,17 @@
-import {pubsub, https} from "firebase-functions";
+import * as functions from "firebase-functions";
 import {defineSecret} from "firebase-functions/params";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {initializeApp} from "firebase-admin/app";
 
+import {Buffer} from "node:buffer";
 import fetch from "node-fetch";
 import {Feed} from "feed";
-
 import * as express from "express";
 import * as cors from "cors";
 import * as FeedParser from "feedparser";
 import {filesize} from "humanize";
-import * as Diff2html from "diff2html";
-// import escapeHtml = require('escape-html');
+// import * as Diff2html from "diff2html";
+import escapeHtml = require("escape-html");
 
 initializeApp();
 const db = getFirestore();
@@ -32,6 +32,10 @@ const URL_MATCH = /^https:\/\/github.com\/([\w\-_]+)\/([\w\-_]+)\/compare\/(\w+)
 //   response.send("Hello from Firebase!");
 // });
 
+const toId = (url: string): string => {
+  return Buffer.from(url).toString("base64");
+};
+
 const fetchFeed = async () => {
   const processItem = async (e: any) => {
     // skip github pages update
@@ -41,7 +45,7 @@ const fetchFeed = async () => {
 
     const link: string = e.link;
 
-    const ref = await col.doc(link).get();
+    const ref = await col.doc(toId(link)).get();
     if (ref.exists) {
       return;
     }
@@ -52,7 +56,7 @@ const fetchFeed = async () => {
       return;
     }
 
-    const parsedTime = Date.parse(e.Updated);
+    const parsedTime = Date.parse(e.updated);
 
     const fetchUrl = async (url: string): Promise<string> => {
       console.log("Fetching:", url);
@@ -68,9 +72,9 @@ const fetchFeed = async () => {
       } else if (src.length > FEED_SIZE_THRESHOLD) {
         return `Data size too big: ${filesize(src.length)}`;
       } else {
-        // return `<pre>${escapeHtml(src)}</pre>`;
-        const diffJson = Diff2html.parse(src);
-        return Diff2html.html(diffJson, {});
+        return `<pre>${escapeHtml(src)}</pre>`;
+        // const diffJson = Diff2html.parse(src);
+        // return Diff2html.html(diffJson, {});
       }
     };
 
@@ -83,7 +87,7 @@ const fetchFeed = async () => {
       diff: await fetchUrl(link + ".diff"),
     };
 
-    const docRef = col.doc(link);
+    const docRef = col.doc(toId(link));
     await docRef.set(doc);
 
     const removeOlds = async () => {
@@ -113,6 +117,7 @@ const fetchFeed = async () => {
       .on("readable", function(this: any) {
         let item;
         while (/* eslint-disable no-invalid-this */ item = this.read()) {
+          console.log("Processing:", item.title);
           processItem(item);
         }
       })
@@ -154,6 +159,8 @@ const generateFeed = async (field: string): Promise<string> => {
   return feed.atom1();
 };
 
+exports.schedule = functions.runWith({secrets: ["GITHUB_FEED_URL"]}).pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
+
 const app = express();
 
 // Automatically allow cross-origin requests
@@ -166,9 +173,8 @@ app.get("/patch", async (req, res) => {
   res.send(await generateFeed("patch"));
 });
 app.get("/manual", (req, res) => {
-  fetchFeed();
+  exports.schedule();
   res.send("started manual fetch");
 });
 
-exports.main = https.onRequest(app);
-exports.scheduleFunction = pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
+exports.main = functions.runWith({secrets: ["APP_URL"]}).https.onRequest(app);
