@@ -45,14 +45,14 @@ const fetchFeed = async () => {
 
     const link: string = e.link;
 
-    const ref = await col.doc(toId(link)).get();
-    if (ref.exists) {
-      return;
-    }
-
     const m = link.match(URL_MATCH);
     if (!m) {
       console.log("Skipping non-diff url:", link);
+      return;
+    }
+
+    const ref = await col.doc(toId(link)).get();
+    if (ref.exists) {
       return;
     }
 
