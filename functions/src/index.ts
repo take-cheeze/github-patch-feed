@@ -163,7 +163,7 @@ const removeOlds = async () => {
   await batch.commit();
 };
 
-functions.setGlobalOptions({secrets: ["GITHUB_FEED_URL", "APP_URL"]});
+functions.setGlobalOptions({secrets: ["GITHUB_FEED_URL", "APP_URL"], memory: "512MiB"});
 
 exports.schedule = functions.scheduler.onSchedule("every 5 minutes", fetchFeed);
 exports.gc = functions.scheduler.onSchedule("every 10 minutes", removeOlds);
