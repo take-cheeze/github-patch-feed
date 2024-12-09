@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v2";
 import {defineSecret} from "firebase-functions/params";
 import {getFirestore, Timestamp} from "firebase-admin/firestore";
 import {initializeApp} from "firebase-admin/app";
@@ -104,16 +104,16 @@ const fetchFeed = async () => {
 
   const parser = new FeedParser({});
   response.body.pipe(parser)
-      .on("readable", function(this: any) {
-        let item;
-        while (/* eslint-disable no-invalid-this */ item = this.read()) {
-          console.log("Processing:", item.title);
-          processItem(item);
-        }
-      })
-      .on("error", (error: any) => {
-        console.error(error);
-      });
+    .on("readable", function(this: any) {
+      let item;
+      while (/* eslint-disable no-invalid-this */ item = this.read()) {
+        console.log("Processing:", item.title);
+        processItem(item);
+      }
+    })
+    .on("error", (error: any) => {
+      console.error(error);
+    });
 };
 
 const generateFeed = async (field: string): Promise<string> => {
@@ -163,10 +163,10 @@ const removeOlds = async () => {
   await batch.commit();
 };
 
-const f = functions.runWith({secrets: ["GITHUB_FEED_URL", "APP_URL"]});
+functions.setGlobalOptions({secrets: ["GITHUB_FEED_URL", "APP_URL"]});
 
-exports.schedule = f.pubsub.schedule("every 5 minutes").onRun(() => fetchFeed());
-exports.gc = f.pubsub.schedule("every 10 minutes").onRun(() => removeOlds());
+exports.schedule = functions.scheduler.onSchedule("every 5 minutes", fetchFeed);
+exports.gc = functions.scheduler.onSchedule("every 10 minutes", removeOlds);
 
 const app = express();
 
@@ -188,4 +188,4 @@ app.get("/manual_gc", (req, res) => {
   res.send("started manual gc");
 });
 
-exports.main = f.https.onRequest(app);
+exports.main = functions.https.onRequest(app);
